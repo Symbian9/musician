@@ -57,6 +57,7 @@ tuninglength=0
 registered=0
 dummy1=0 # dummy variable, for later extension to the settings file
 dummy2=0
+volume=-1
 
 appuifw.app.screen='full'
 img=None
@@ -122,34 +123,55 @@ keycode2filename = { \
     EScancodeBackspace : "D:\\ptopc.mid", \
     }
 
+def set_volume(S, adj):
+    global volume
+    S.set_volume(S.current_volume() + adj)
+    volume = S.current_volume()
+    appuifw.note(u"Volume is now: %s" % volume, "info")
 
 def piano():
+    global volume
     filename = "E:\\Musician\\keyboard%3d.raw" % width
     img.load(filename ,callback=handle_redraw)
 
+    appuifw.note(u"You can use up-down to change the volume", "info")
     handle_redraw(())
 
     delay=0.1 # delay means that loop doesn't burn round so fast that nothing works
     timer.after(delay)
     S = None
-    lastfilename = "silence"
+    lastfilename = None
+
+    def open_midi(filename):
+        if filename != lastfilename:
+            if S:
+                S.close()
+            new_S = audio.Sound.open(filename)
+            if (volume != -1):
+                new_S.set_volume(volume)
+            return new_S
+        return S
+
+
+    # Load an arbitrary midi file to load the volume global value
+    S = open_midi(keycode2filename.values()[0])
+    volume = S.current_volume()
 
     while 1:
 	if(keyboard.get_last_key() and keycode2filename.has_key(keyboard.get_last_key())):
 	    filename = keycode2filename[keyboard.get_last_key()]
 	    keyboard.clear_last_key()
-	    if S is not None:
-		S.stop()
-	    if(filename != lastfilename):
-		if S is not None:
-		    S.close()
-		S = audio.Sound.open(filename)
+	    S.stop()
+	    S = open_midi(filename)
+            lastfilename = filename
 	    S.play(1,0)
-	    lastfilename = filename
         elif keyboard.pressed(EScancodeLeftSoftkey):  #want to exit piano
-            if S is not None:
-                S.stop()
+            S.stop()
             break
+        elif keyboard.pressed(EScancodeDownArrow) : # Decrease volume
+            set_volume(S, -1)
+        elif keyboard.pressed(EScancodeUpArrow):  # Increase volume
+            set_volume(S, 1)
         e32.ao_yield()
         timer.after(delay)
 
@@ -265,6 +287,7 @@ def write_settings():
     config={}
     config['registered']= registered
     config['sound']= soundflag
+    config['volume']= volume
     config['tuninglength']= tuninglength
     config['param1']= dummy1
     config['param2']= dummy2
@@ -277,6 +300,7 @@ def read_settings():
     global registered
     global soundflag
     global tuninglength
+    global volume
     global dummy1
     global dummy2
     CONFIG_FILE='E:\\musician\\musician.set'
@@ -289,6 +313,7 @@ def read_settings():
             registered=config.get('registered','')
             soundflag=config.get('sound','')
             tuninglength=config.get('tuninglength','')
+            volume=config.get('volume',-1)
             dummy1=config.get('param1','')
             dummy2=config.get('param2','')
         except:
